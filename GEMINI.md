@@ -57,3 +57,15 @@ pip install -e ".[testing]"
 - **Upstream Compatibility**: Designed to ingest probability layers produced by `napari-rf`.
 - **Feature Robustness**: Handle multi-dimensional images (2D/3D stacks) during feature extraction.
 - **State Management**: Persist feature tables associated with label layers to avoid redundant computations.
+
+### Coding Style & Logic
+- **Explicit State Management**: Prefer centralized state dictionaries (`image_states`) to track data and caches. Avoid "magic number" shape checks (e.g., `ndim == 4`) to infer state.
+- **Standardized Terminology**:
+    - **`image`**: Refers to the data source or image object.
+    - **`slice`**: Refers to a specific 2D plane within a 3D stack.
+    - **`layer`**: Reserved specifically for napari UI layer components.
+- **Condition Flags**: Use explicit function arguments (e.g., `feature_type="training"`) to communicate intent instead of checking variable properties (like list lengths) to infer logic.
+- **Status Reporting**: Provide clear console reports for the lifecycle of operations:
+    - **Success/Failure**: Report the outcome of training, prediction, and I/O.
+    - **Metadata**: Report when image selection or paths are updated.
+    - **I/O Actions**: Explicitly print the target path when saving or loading models and labels.

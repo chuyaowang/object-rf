@@ -1,9 +1,6 @@
 name: object-rf
-display_name: Object Rf
-# use 'hidden' to remove plugin from napari hub search results
+display_name: Object RF
 visibility: public
-# see https://napari.org/stable/plugins/technical_references/manifest.html#fields for valid categories
-# categories: []
 contributions:
   commands:
     - id: object-rf.get_reader
@@ -18,18 +15,9 @@ contributions:
     - id: object-rf.make_sample_data
       python_name: object_rf._sample_data:make_sample_data
       title: Load sample data from Object Rf
-    - id: object-rf.make_container_widget
-      python_name: object_rf:ImageThreshold
-      title: Make threshold Container widget
-    - id: object-rf.make_magic_widget
-      python_name: object_rf:threshold_magic_widget
-      title: Make threshold magic widget
-    - id: object-rf.make_function_widget
-      python_name: object_rf:threshold_autogenerate_widget
-      title: Make threshold function widget
-    - id: object-rf.make_qwidget
-      python_name: object_rf:ExampleQWidget
-      title: Make example QWidget
+    - id: object-rf.make_object_widget
+      python_name: object_rf:ObjectWidget
+      title: Make Object Classification Widget
   readers:
     - command: object-rf.get_reader
       accepts_directories: false
@@ -46,18 +34,5 @@ contributions:
       display_name: Object Rf
       key: unique_id.1
   widgets:
-    - command: object-rf.make_container_widget
-      display_name: Container Threshold
-    - command: object-rf.make_magic_widget
-      display_name: Magic Threshold
-    - command: object-rf.make_function_widget
-      autogenerate: true
-      display_name: Autogenerate Threshold
-    - command: object-rf.make_qwidget
-      display_name: Example QWidget
-  menus:
-    napari/layers/segment:
-      - command: object-rf.make_container_widget
-      - command: object-rf.make_magic_widget
-      - command: object-rf.make_function_widget
-      - command: object-rf.make_qwidget
+    - command: object-rf.make_object_widget
+      display_name: Object Classification
