@@ -36,18 +36,20 @@
 
 ---
 
-## Building and Running
+## Testing Standards & CI
 
-### Development Setup
-```bash
-pip install -e .
-pip install -e ".[testing]"
-```
+### Test Organization
+- **Logic Tests**: Place core algorithmic and data processing tests in the root `tests/` directory (e.g., `tests/test_logic.py`). These tests **must not** require a `napari.Viewer` or any GUI elements, allowing them to run in headless CLI environments.
+- **GUI Tests**: Place tests that require a `napari.Viewer` or Qt widgets in a `tests/gui/` subdirectory (e.g., `tests/gui/test_widget.py`).
 
-### Running and Testing
-- Launch: `napari`
-- Tests: `pytest`
-- Tox: `tox`
+### Headless Compatibility
+- **Pytest Configuration**: To prevent crashes in environments without a display (like remote SSH or basic CI), the `tests/gui/` directory is excluded from default `pytest` runs via `pyproject.toml` (`norecursedirs = ["gui"]`).
+- **Running GUI Tests**: When a display is available, run GUI tests explicitly: `pytest tests/gui/`.
+
+### Updating Testing Setup
+- **New Dependencies**: When adding libraries that are imported in the source code, always update `pyproject.toml`'s `dependencies` section. If the library is only needed for testing, add it to `dependency-groups.dev`.
+- **CI Synchronization**: Ensure that `tox.ini` and `.github/workflows/test_and_deploy.yml` are updated if new Python versions are supported or if specific system-level dependencies (like OpenGL libs) are required.
+- **Mocking**: For logic tests that involve complex `napari` objects, prefer mocking the objects or testing the underlying functions with simple `numpy` arrays to maintain headless compatibility.
 
 ---
 
