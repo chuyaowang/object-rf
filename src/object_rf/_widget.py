@@ -1,6 +1,8 @@
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from napari.qt.threading import thread_worker
+from napari.utils import progress
 from qtpy.QtWidgets import (
     QComboBox,
     QLabel,
@@ -9,7 +11,10 @@ from qtpy.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from scipy.ndimage import binary_fill_holes
 from skimage import measure
+
+from .feature_extraction import FeatureExtractor
 
 if TYPE_CHECKING:
     import napari
@@ -26,18 +31,27 @@ class ObjectWidget(QWidget):
         self._current_image = None
         self.clf = None  # Future RandomForestClassifier
         self._clf_ready = False
+        self.feature_extractor = FeatureExtractor()
 
         # --- UI Components ---
         self.setLayout(QVBoxLayout())
 
         # 1. Image Layer Selection (Probabilities or masks)
-        self.layout().addWidget(QLabel('Select Image/Probability Layer:'))
+        self.layout().addWidget(QLabel('Select Probability/Label Layer:'))
         self.layer_combo = QComboBox()
         self.layer_combo.setToolTip(
-            'Select the image or multi-channel probability layer to segment.'
+            'Select the image (probabilities) or label layer to segment.'
         )
         self.layer_combo.currentIndexChanged.connect(self._on_layer_change)
         self.layout().addWidget(self.layer_combo)
+
+        # 2. Original Image Selection (Intensity Source)
+        self.layout().addWidget(QLabel('Select Original Intensity Image:'))
+        self.image_combo = QComboBox()
+        self.image_combo.setToolTip(
+            'Select the original image to use as the intensity source for features.'
+        )
+        self.layout().addWidget(self.image_combo)
 
         self.btn_segment = QPushButton('Segment Objects')
         self.btn_segment.setToolTip(
@@ -86,13 +100,15 @@ class ObjectWidget(QWidget):
         self.viewer.layers.events.removed.connect(self._on_layer_change)
         self._on_layer_change()
 
-    def _init_image_state(self, image):
-        """Initialize the state dictionary for a specific image layer."""
-        if image is None or image in self.image_states:
+    def _init_image_state(self, layer):
+        """Initialize the state dictionary for a specific layer (Image or Labels)."""
+        if layer is None or layer in self.image_states:
             return
 
+        import napari
+
         path = None
-        source = getattr(image, 'source', None)
+        source = getattr(layer, 'source', None)
         raw_path = getattr(source, 'path', None)
         if raw_path:
             path = str(
@@ -101,10 +117,25 @@ class ObjectWidget(QWidget):
                 else raw_path
             )
 
-        self.image_states[image] = {
-            'data': image.data,
-            'ndim': image.data.ndim,
-            'name': image.name,
+        # Determine layer type and original image dimensionality
+        data = layer.data
+        if isinstance(layer, napari.layers.Image):
+            if np.issubdtype(data.dtype, np.floating):
+                layer_type = 'probabilities'
+                orig_ndim = data.ndim - 1
+            else:
+                layer_type = 'mask'
+                orig_ndim = data.ndim
+        else:
+            layer_type = 'mask'
+            orig_ndim = data.ndim
+
+        self.image_states[layer] = {
+            'data': data,
+            'ndim': data.ndim,
+            'orig_ndim': orig_ndim,
+            'layer_type': layer_type,
+            'name': layer.name,
             'path': path,
             'objects': None,  # Identified unique labels
             'labeled_slices': [],  # Indices for 3D stacks
@@ -112,37 +143,68 @@ class ObjectWidget(QWidget):
             'training_probabilities': None,
             'prediction_probabilities': None,
         }
-        print(f'[Object RF] Initialized state for: {image.name}')
+        print(
+            f'[Object RF] Initialized state for: {layer.name} '
+            f'(Type: {layer_type}, Orig NDIM: {orig_ndim})'
+        )
 
     def _on_layer_change(self, event=None):
-        """Update dropdown and manage state transition between image layers."""
+        """Update dropdowns and manage state transition between image layers."""
         import napari
 
-        # 1. Update Dropdown
-        current_selection = self.layer_combo.currentText()
+        # 1. Update Dropdowns
+        current_layer_name = self.layer_combo.currentText()
+        current_image_name = self.image_combo.currentText()
+
         self.layer_combo.blockSignals(True)
+        self.image_combo.blockSignals(True)
+
         self.layer_combo.clear()
+        self.image_combo.clear()
 
         image_layers = [
             layer
             for layer in self.viewer.layers
             if isinstance(layer, napari.layers.Image)
         ]
-        self.layer_combo.addItems([layer.name for layer in image_layers])
+        label_layers = [
+            layer
+            for layer in self.viewer.layers
+            if isinstance(layer, napari.layers.Labels)
+        ]
+
+        # layer_combo shows both Image and Labels
+        all_candidate_layers = image_layers + label_layers
+        self.layer_combo.addItems(
+            [layer.name for layer in all_candidate_layers]
+        )
+
+        # image_combo shows only Image
+        self.image_combo.addItems([layer.name for layer in image_layers])
 
         # Restore selection
-        for i, layer in enumerate(image_layers):
-            if layer.name == current_selection:
+        for i, layer in enumerate(all_candidate_layers):
+            if layer.name == current_layer_name:
                 self.layer_combo.setCurrentIndex(i)
                 break
         else:
-            if image_layers:
+            if all_candidate_layers:
                 self.layer_combo.setCurrentIndex(0)
+
+        for i, layer in enumerate(image_layers):
+            if layer.name == current_image_name:
+                self.image_combo.setCurrentIndex(i)
+                break
+        else:
+            if image_layers:
+                self.image_combo.setCurrentIndex(0)
+
         self.layer_combo.blockSignals(False)
+        self.image_combo.blockSignals(False)
 
         # 2. Handle State Migration
-        active_image = self.get_selected_layer()
-        if active_image != self._current_image:
+        active_layer = self.get_selected_layer()
+        if active_layer != self._current_image:
             if (
                 self._current_image
                 and self._current_image in self.image_states
@@ -159,14 +221,14 @@ class ObjectWidget(QWidget):
                     if reply == QMessageBox.Yes:
                         del self.image_states[self._current_image]
 
-            self._current_image = active_image
-            self._init_image_state(active_image)
+            self._current_image = active_layer
+            self._init_image_state(active_layer)
 
         # 3. Enable/Disable UI
-        has_layers = active_image is not None
+        has_layers = active_layer is not None
         self.btn_segment.setEnabled(has_layers)
 
-        state = self.image_states.get(active_image)
+        state = self.image_states.get(active_layer)
         has_objects = state is not None and state['objects'] is not None
         self.btn_extract.setEnabled(has_objects)
 
@@ -180,35 +242,48 @@ class ObjectWidget(QWidget):
             return self.viewer.layers[name]
         return None
 
+    def get_intensity_layer(self):
+        name = self.image_combo.currentText()
+        if name in self.viewer.layers:
+            return self.viewer.layers[name]
+        return None
+
     def segment_objects(self):
         """
         Segment objects from the selected layer.
-        - If Probabilities (Float): Uses argmax to find the most likely class per pixel
+        - If Probabilities: Uses argmax to find the most likely class per pixel
           (axis 1 for 4D, axis 0 for 3D), treats classes > 0 as foreground.
-        - If Labels/Mask (Integer): Treats all values > 0 as foreground.
+        - If Mask: Treats all values > 0 as foreground.
         Finally, assigns unique object IDs to all identified foreground objects.
         """
         layer = self.get_selected_layer()
         if layer is None:
             return
 
+        # Ensure we have state for the active layer
+        self._init_image_state(layer)
         state = self.image_states.get(layer)
         if state is None:
             return
 
         data = layer.data
-        is_float = np.issubdtype(data.dtype, np.floating)
-
-        if is_float:
-            # Probability-to-Class logic from napari-rf
-            # 2D multi-channel: (C, Y, X) -> axis 0
-            # 3D multi-channel: (Z, C, Y, X) -> axis 1
-            argmax_axis = 1 if data.ndim == 4 else 0
+        if state['layer_type'] == 'probabilities':
+            # Probability-to-Class logic:
+            # 2D multi-channel (orig 2D): (C, Y, X) -> axis 0
+            # 3D multi-channel (orig 3D): (Z, C, Y, X) -> axis 1
+            argmax_axis = 1 if state['orig_ndim'] == 3 else 0
             class_map = np.argmax(data, axis=argmax_axis)
             foreground = class_map > 0
         else:
-            # Already labels or binary mask
+            # Mask/Labels: Already integers
             foreground = data > 0
+
+        # Fill internal holes slice-by-slice for 3D stacks
+        if state['orig_ndim'] == 3:
+            for z in range(foreground.shape[0]):
+                foreground[z] = binary_fill_holes(foreground[z])
+        else:
+            foreground = binary_fill_holes(foreground)
 
         # Assign unique IDs to discrete objects
         labels = measure.label(foreground)
@@ -223,16 +298,61 @@ class ObjectWidget(QWidget):
         self.btn_extract.setEnabled(True)
 
     def extract_features(self):
-        """Calculate features for current object set."""
+        """Calculate features for current object set using a thread worker."""
         state = self.image_states.get(self._current_image)
         if state is None or state['objects'] is None:
             return
 
-        print(f"Extracting features for '{state['name']}'...")
-        # (Mock feature calculation)
-        # state['features'] = calculate_props(state['objects'], self._current_image.data)
+        intensity_layer = self.get_intensity_layer()
+        if intensity_layer is None:
+            print('No intensity image selected.')
+            return
 
-        self.btn_train.setEnabled(True)
+        intensity_data = intensity_layer.data
+        print(
+            f"Extracting features using intensity from '{intensity_layer.name}'..."
+        )
+
+        self.btn_extract.setEnabled(False)
+        pbar = progress(desc='Extracting Object Features')
+
+        @thread_worker
+        def _extract_worker():
+            gen = self.feature_extractor.generate_features(
+                state['objects'], intensity_image=intensity_data
+            )
+            try:
+                while True:
+                    yield next(gen)
+            except StopIteration:
+                pass
+
+        def _on_yielded(val):
+            if isinstance(val, tuple):
+                curr, total, desc = val
+                pbar.total = total
+                pbar.n = curr
+                pbar.set_description(desc)
+                pbar.refresh()
+            else:
+                # Final yield is the DataFrame
+                state['features'] = val
+
+        def _on_finished():
+            pbar.close()
+            self.btn_extract.setEnabled(True)
+            if state['features'] is not None:
+                print(
+                    f'Extracted features for {len(state["features"])} objects.'
+                )
+                self.btn_train.setEnabled(True)
+            else:
+                print('Feature extraction failed.')
+
+        worker = _extract_worker()
+        worker.yielded.connect(_on_yielded)
+        worker.finished.connect(_on_finished)
+        worker.start()
 
     def train_classifier(self):
         """Placeholder for training."""
