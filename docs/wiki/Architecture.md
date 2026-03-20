@@ -30,6 +30,23 @@ graph TD
     D --> E
 ```
 
-## Key Decisions
-- **Pandas Integration**: Features are stored in pandas DataFrames for easy visualization and compatibility with `scikit-learn`.
-- **Properties Tables**: Object-level features are attached to napari's labels layer properties to enable interactive data exploration.
+## Segmentation Pipeline
+
+To ensure high-quality object classification, `object-rf` uses a robust, multi-step pipeline to transform pixel-level probability maps into unique, clean object labels.
+
+1.  **Probability to Mask (`argmax`)**:
+    -   Probability stacks from `napari-rf` are converted to integer class maps by taking the `argmax` across the probability dimension (axis 1 for 3D, axis 0 for 2D).
+    -   Foreground is defined as any pixel with a class ID > 0.
+2.  **Morphological Pre-processing**:
+    -   `binary_fill_holes` is applied to ensure objects are solid. For 3D stacks, this is performed slice-by-slice to preserve axial structures while filling internal gaps.
+3.  **Initial Object Labeling**:
+    -   `skimage.measure.label` generates unique integer IDs for all connected components.
+4.  **Automated Size Filtering (Noise Removal)**:
+    -   **Log-Transformation**: Areas of all initial objects are converted to `log10` space to compress high-magnitude variance and highlight scale-based differences.
+    -   **Clustering (K-Means)**: `KMeans(n_clusters=2)` separates objects into "Noise" and "Signal" populations based on their log-areas.
+    -   **Optimization (SVM)**: A linear Support Vector Machine (`SVC`) is trained on the log-areas to find the optimal decision boundary that best separates the two clusters.
+    -   **Thresholding**: Objects with areas below the SVM boundary are discarded, effectively removing false positives from the pixel-level classifier.
+5.  **Dilation**:
+    -   The remaining objects are dilated (Radius 1: `ball` for 3D, `disk` for 2D) using `morphology.dilation`. This ensures the object boundaries encompass the full intensity transition zones, improving feature extraction accuracy.
+6.  **Sequential Relabeling**:
+    -   `segmentation.relabel_sequential` is used to ensure label IDs are continuous (1 to $N$) and synchronized with the internal feature matrix.

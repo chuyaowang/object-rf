@@ -6,9 +6,12 @@ This guide describes the workflow for using the `object-rf` plugin to perform ob
 
 ### 1. Object Segmentation
 The starting point is often a probability map (e.g., from `napari-rf`).
-- **Select Probability Layer**: Choose the layer containing pixel-level probabilities.
-- **Thresholding**: Apply a threshold to identify regions of interest.
-- **Labeling**: Convert the binary mask into a labels layer where each object has a unique ID.
+- **Select Probability/Label Layer**: Choose the layer containing pixel-level probabilities or a binary mask.
+- **Automated Segmentation**: The plugin automatically converts probabilities into a foreground mask using `argmax`.
+- **Hole Filling**: Small internal holes are filled to ensure object integrity.
+- **Intelligent Noise Filtering**: The plugin uses K-Means clustering and a linear SVM on log-transformed areas to automatically identify and remove small false positives caused by pixel-wise predictions.
+- **Expansion (Dilation)**: Identified objects are slightly dilated to better capture boundary intensities.
+- **Labeling**: Objects are assigned unique, sequential IDs in a new labels layer.
 
 ### 2. Feature Extraction
 Once objects are identified, the plugin calculates features for each object:
