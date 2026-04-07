@@ -72,3 +72,12 @@
     - **Success/Failure**: Report the outcome of training, prediction, and I/O.
     - **Metadata**: Report when image selection or paths are updated.
     - **I/O Actions**: Explicitly print the target path when saving or loading models and labels.
+
+### Linting & Formatting Standards (Ruff/Pre-commit)
+- **Quotes**: Prefer **single quotes** (`'`) for strings unless double quotes are required for nesting.
+- **Generators**: Always use `yield from` when yielding over an existing generator or iterable.
+- **Unused Variables**: Loop control variables not used within the loop body must be prefixed with an underscore (e.g., `for _idx, row in df.iterrows():`).
+- **Exceptions**: **NEVER** use blind `except Exception:`. Always catch specific error types (e.g., `ValueError`, `RuntimeError`, `IOError`).
+- **Statement Density**: Do not put multiple statements on a single line (e.g., `if x: return` must be split into two lines).
+- **Closure Safety**: When defining a function inside a loop (closure), ensure all loop-dependent variables are explicitly passed as arguments to avoid late-binding artifacts.
+- **Whitespace**: No trailing whitespace and exactly one newline at the end of every file.
