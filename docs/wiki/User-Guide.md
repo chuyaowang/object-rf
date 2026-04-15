@@ -23,12 +23,13 @@ The plugin automatically calculates a comprehensive set of features for each obj
 ### 3. Annotation & Training
 To teach the classifier, you must provide ground truth for some objects.
 - **Draw Labels**: Click the **"Draw Labels"** button. This automatically adds a new labels layer named **`Object Labels`** with the correct spatial dimensions (stripping channel dimensions if a probability layer is selected).
-- **Annotate**: Select the `Object Labels` layer and use the brush tool to paint over representative objects. You only need to label a subset of objects and slices.
-- **Train Classifier**: Click **"Train Object Classifier"**. The plugin will extract features *only* for the annotated slices and map your brush strokes to the segmented objects by taking the maximum class ID within each object's mask.
+- **Import Labels**: You can drag and drop previously saved manual label files ending in `_object_manual_labels.tif`. The plugin will automatically convert it from an Image layer to a Labels layer, allowing you to seamlessly resume annotating.
+- **Annotate**: Select the `Object Labels` layer (or your imported labels layer) and use the brush tool to paint over representative objects. You only need to label a subset of objects and slices.
+- **Train Classifier**: Click **"Train Object Classifier"**. The plugin will extract features for all objects on the annotated slices and map your brush strokes to the segmented objects by taking the maximum class ID within each object's mask.
 
 ### 4. Application
 - **Predict**: Click **"Apply Random Forest"** (or **"Apply RF to All Slices"** for 3D).
-- **Memory Efficiency**: For 3D stacks, the plugin processes the stack slice-by-slice, discarding features immediately after prediction to minimize RAM usage.
+- **Memory Efficiency**: For 3D stacks, the plugin processes the stack slice-by-slice, and accumulates the features in a master table (`full_feature_table`) for subsequent exports, while dynamically generating predictions.
 - **Results**: A new labels layer is added showing the predicted classes.
 
 ## UI Features & IO
@@ -37,6 +38,7 @@ To teach the classifier, you must provide ground truth for some objects.
 - **Save Predictions**: Exports two files for your classification results:
     - `..._class.tif`: An integer map of the most likely class for every pixel.
     - `..._probs.tif`: A floating-point multi-channel map containing the full probability distribution.
+- **Save Features (CSV)**: Exports the `full_feature_table` for all processed objects to a CSV file. The table includes an auto-populated `true_label` column so you can track which objects were manually annotated during training and which were predicted.
 - **Save/Load Classifier**: Export and import your trained object-level models (`.joblib`). The default filename is `object_classifier.joblib`.
 
 ## Data Shapes & Formats
