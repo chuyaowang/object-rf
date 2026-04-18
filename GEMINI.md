@@ -86,3 +86,7 @@
 - **Statement Density**: Do not put multiple statements on a single line (e.g., `if x: return` must be split into two lines).
 - **Closure Safety**: When defining a function inside a loop (closure), ensure all loop-dependent variables are explicitly passed as arguments to avoid late-binding artifacts.
 - **Whitespace**: No trailing whitespace and exactly one newline at the end of every file.
+
+## Interaction Guideline
+
+- When the users asks for a code change or bug fix. Always analyze the request first, draft a plan, explain the reasoning, and wait for the user's explicit confirmation to begin coding.
