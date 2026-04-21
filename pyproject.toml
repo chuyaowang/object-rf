@@ -35,6 +35,11 @@ dependencies = [
     "scikit-image",
     "scikit-learn",
     "pandas",
+    "matplotlib",
+    "xgboost",
+    "scipy",
+    "joblib",
+    "plotly",
 ]
 
 [project.optional-dependencies]
