@@ -1,6 +1,6 @@
-# Technical Deep-Dive: Pairwise PLS-DA Feature Selection
+# Pairwise PLS-DA Feature Selection + XGBoost
 
-This document provides a comprehensive overview of the **Pairwise Partial Least Squares Discriminant Analysis (PLS-DA)** feature selection engine implemented in `object-xgb`.
+This document provides a overview of the **Pairwise Partial Least Squares Discriminant Analysis (PLS-DA)** feature selection + XGBoost pipeline implemented in `object-xgb`.
 
 ---
 
@@ -44,19 +44,7 @@ $$VIP_{j} = \sqrt{p \cdot \frac{\sum_{h=1}^H SS_h \cdot (w_{hj} / ||w_h||)^2}{\s
 
 ---
 
-## 3. Comparison: PLS-DA vs. sPLS-DA vs. O-PLS-DA
-
-| Feature | **PLS-DA** (Standard) | **sPLS-DA** (Sparse) | **O-PLS-DA** (Orthogonal) |
-| :--- | :--- | :--- | :--- |
-| **Primary Goal** | Maximize $X-Y$ Covariance. | Built-in Feature Selection via Sparsity. | Improved Interpretability of Loadings. |
-| **Selection Logic** | Post-hoc filtering via VIP scores or loadings. | L1-regularization (Lasso) forces non-essential weights to zero. | Separates "Predictive" variance from "Orthogonal" (noise) variance. |
-| **Best Used When...** | You have a moderate number of features and want robust classification. | You have thousands of features (e.g., genomics) and need a very sparse subset. | You need to explain *why* the model is making a decision (Biplot analysis). |
-| **Complexity** | Low / Fast. | Moderate (requires tuning sparsity parameters). | High (requires careful rotation of components). |
-| **In `object-xgb`** | **Selected** (Standard + Pairwise VIP). | *Planned for future research.* | *Used for Biplot visualizations.* |
-
----
-
-## 4. Implementation in `object-xgb`
+## 3. Implementation in `object-xgb`
 
 ### Group-Aware Extraction
 Because PLS-DA depends on a consistent feature set, the `FeatureExtractor` ensures that:
